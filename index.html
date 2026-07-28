@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 윤리 모의법정</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Firebase V8 Compat CDN (교육용으로 설정이 가장 직관적임) -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+  <!-- 학생 대시보드 -->
+  <div id="student-view" class="max-w-4xl mx-auto p-6">
+    <div class="flex justify-between items-center mb-8">
+      <h1 class="text-3xl font-bold text-blue-700">⚖️ AI 윤리 모의법정</h1>
+      <button onclick="enterTeacherMode()" class="bg-gray-200 text-gray-600 px-4 py-2 rounded hover:bg-gray-300 text-sm">교사 대시보드</button>
+    </div>
+
+    <!-- 딜레마 학습 및 선택 -->
+    <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+      <h2 class="text-xl font-semibold mb-4">1. 딜레마 상황 학습 및 선택</h2>
+      <select id="dilemma-select" onchange="updateDilemmaInfo()" class="w-full p-3 border rounded mb-4 focus:ring-2 focus:ring-blue-500">
+        <option value="">-- 모둠의 딜레마를 선택하세요 --</option>
+      </select>
+      <div id="dilemma-info" class="hidden bg-blue-50 p-4 rounded border border-blue-100 mb-4">
+        <p id="dilemma-desc" class="text-lg font-medium text-blue-800 mb-4"></p>
+        <div class="flex gap-4">
+          <label class="flex-1 cursor-pointer">
+            <input type="radio" name="dilemma_choice" value="A" class="peer hidden">
+            <div class="p-4 text-center border-2 border-gray-200 rounded peer-checked:border-blue-500 peer-checked:bg-blue-100 font-bold" id="btn-a-text"></div>
+          </label>
+          <label class="flex-1 cursor-pointer">
+            <input type="radio" name="dilemma_choice" value="B" class="peer hidden">
+            <div class="p-4 text-center border-2 border-gray-200 rounded peer-checked:border-red-500 peer-checked:bg-red-100 font-bold" id="btn-b-text"></div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- 활동지 작성 폼 -->
+    <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+      <h2 class="text-xl font-semibold mb-4">2. 모의법정 활동지 작성</h2>
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <input type="text" id="student-id" placeholder="1. 교번 (예: 30101)" class="p-3 border rounded w-full">
+        <input type="text" id="student-name" placeholder="2. 이름" class="p-3 border rounded w-full">
+      </div>
+      <textarea id="reason-fact" placeholder="3. 내 선택의 사실적 근거 (사회 시간 조사 내용 참고)" class="w-full p-3 border rounded mb-4 h-24"></textarea>
+      <textarea id="reason-moral" placeholder="4. 내 선택의 도덕적 가치 근거 (도덕 시간 토론 내용 참고)" class="w-full p-3 border rounded mb-4 h-24"></textarea>
+      <textarea id="reason-rebuttal" placeholder="5. 예상 반론에 대한 반박 (내 주장이 타당한 이유)" class="w-full p-3 border rounded mb-4 h-24"></textarea>
+      <button onclick="submitForm()" class="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-700 transition">활동지 제출하기</button>
+    </div>
+
+    <!-- 교사 피드백 확인 -->
+    <div class="bg-white p-6 rounded-lg shadow-md">
+      <h2 class="text-xl font-semibold mb-4">📝 교사 피드백 확인</h2>
+      <div class="flex gap-4 mb-4">
+        <input type="text" id="search-student-id" placeholder="교번을 입력하세요" class="p-3 border rounded flex-1">
+        <button onclick="checkFeedback()" class="bg-green-600 text-white px-6 py-3 rounded hover:bg-green-700 font-bold">확인</button>
+      </div>
+      <div id="feedback-result" class="hidden p-4 rounded bg-gray-50 border whitespace-pre-wrap"></div>
+    </div>
+  </div>
+
+  <!-- 교사 대시보드 (초기엔 숨김) -->
+  <div id="teacher-view" class="max-w-6xl mx-auto p-6 hidden">
+    <div class="flex justify-between items-center mb-8">
+      <h1 class="text-3xl font-bold text-purple-700">👨‍🏫 교사 대시보드</h1>
+      <button onclick="exitTeacherMode()" class="bg-gray-200 text-gray-600 px-4 py-2 rounded hover:bg-gray-300">학생 화면으로 돌아가기</button>
+    </div>
+
+    <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold">학생 제출 데이터 (실시간)</h2>
+        <button onclick="downloadCSV()" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">CSV 다운로드</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="p-3 border">교번</th>
+              <th class="p-3 border">이름</th>
+              <th class="p-3 border">주제</th>
+              <th class="p-3 border">선택</th>
+              <th class="p-3 border">사실적 근거</th>
+              <th class="p-3 border">피드백 작성</th>
+            </tr>
+          </thead>
+          <tbody id="student-list-body">
+            <!-- 데이터가 여기에 동적으로 들어갑니다. -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 1. Firebase 설정 (콘솔에서 발급받은 본인의 설정값으로 덮어쓰세요)
+    const firebaseConfig = {
+     apiKey: "AIzaSyDalVypT5fIdLQSRd8z9fyxZEGMaeCRWy0",
+  authDomain: "ai-ethics-court.firebaseapp.com",
+  projectId: "ai-ethics-court",
+  storageBucket: "ai-ethics-court.firebasestorage.app",
+  messagingSenderId: "354848925453",
+  appId: "1:354848925453:web:2250badacf909aa8ed3244"
+};
+
+    // Firebase 초기화
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // 2. 8개 딜레마 데이터
+    const dilemmas = [
+      {id: 1, title: "자율주행차의 트롤리 딜레마", description: "직진 시 보행자 5명 희생 vs 방향 전환 시 운전자 1명 희생", btnA: "직진(보행자 희생)", btnB: "방향전환(운전자 희생)"},
+      {id: 2, title: "AI 범죄 예측 시스템", description: "범죄 예방을 위한 경찰 집중 배치 vs 특정 지역 사람들에 대한 차별적 검문", btnA: "경찰 배치(예방)", btnB: "배치 반대(차별 방지)"},
+      {id: 3, title: "딥페이크와 AI 창작물", description: "새로운 기술로 창조한 개발자의 수익 vs 원본 가수의 목소리를 도용한 권리 침해", btnA: "개발자 수익", btnB: "원본 가수 수익"},
+      {id: 4, title: "AI 면접관의 결정", description: "이유를 설명 못 하는 AI의 합불 판정 vs AI의 평가 결과 무시 및 인간 재평가", btnA: "AI 결과 수용", btnB: "인간 재평가"},
+      {id: 5, title: "소셜 AI 챗봇의 감정 개입", description: "우울증 학생의 행동을 동조한 AI, 책임은 누구에게 있는가?", btnA: "AI 기기/제조사 책임", btnB: "보호자/사용자 책임"},
+      {id: 6, title: "AI 미술 대회 출품", description: "명령어로 만든 작품, 학생의 창작물로 인정 vs 부정행위로 간주", btnA: "창작물로 인정", btnB: "부정행위로 간주"},
+      {id: 7, title: "AI 서술형 채점기", description: "AI 채점 결과 유지 vs 인간의 판단으로 AI 점수 수정", btnA: "AI 점수 유지", btnB: "인간이 수정"},
+      {id: 8, title: "과제 수행과 AI 챗봇", description: "도구 활용(정당) vs 남의 힘을 빌린 커닝(부당)", btnA: "정당한 도구", btnB: "부당한 커닝"}
+    ];
+
+    // 초기 세팅 (드롭다운 채우기)
+    window.onload = () => {
+      const select = document.getElementById("dilemma-select");
+      dilemmas.forEach(d => {
+        let option = document.createElement("option");
+        option.value = d.id;
+        option.text = `[주제 ${d.id}] ${d.title}`;
+        select.appendChild(option);
+      });
+    };
+
+    // 딜레마 선택 시 화면 변경
+    function updateDilemmaInfo() {
+      const selectedId = document.getElementById("dilemma-select").value;
+      const infoDiv = document.getElementById("dilemma-info");
+      if (!selectedId) {
+        infoDiv.classList.add("hidden");
+        return;
+      }
+      const data = dilemmas.find(d => d.id == selectedId);
+      document.getElementById("dilemma-desc").innerText = data.description;
+      document.getElementById("btn-a-text").innerText = data.btnA;
+      document.getElementById("btn-b-text").innerText = data.btnB;
+      infoDiv.classList.remove("hidden");
+    }
+
+    // 학생 활동지 제출
+    async function submitForm() {
+      const studentId = document.getElementById("student-id").value;
+      const studentName = document.getElementById("student-name").value;
+      const dilemmaId = document.getElementById("dilemma-select").value;
+      const choice = document.querySelector('input[name="dilemma_choice"]:checked')?.value;
+      const fact = document.getElementById("reason-fact").value;
+      const moral = document.getElementById("reason-moral").value;
+      const rebuttal = document.getElementById("reason-rebuttal").value;
+
+      if(!studentId || !studentName || !dilemmaId || !choice || !fact || !moral || !rebuttal) {
+        alert("모든 항목과 선택지를 입력해주세요!");
+        return;
+      }
+
+      const submission = {
+        studentId, studentName, dilemmaId, choice, fact, moral, rebuttal,
+        feedback: "", // 교사 피드백 공란
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      try {
+        // 교번을 문서 ID로 사용하여 덮어쓰기 방지 및 조회 용이성 확보
+        await db.collection("submissions").doc(studentId).set(submission);
+        alert("제출이 완료되었습니다! 수고하셨습니다.");
+        location.reload(); // 폼 초기화
+      } catch (error) {
+        console.error("Error writing document: ", error);
+        alert("제출 중 오류가 발생했습니다.");
+      }
+    }
+
+    // 학생 피드백 확인
+    async function checkFeedback() {
+      const studentId = document.getElementById("search-student-id").value;
+      const resultDiv = document.getElementById("feedback-result");
+      
+      if(!studentId) {
+        alert("교번을 입력해주세요."); return;
+      }
+
+      const doc = await db.collection("submissions").doc(studentId).get();
+      resultDiv.classList.remove("hidden");
+
+      if (doc.exists) {
+        const data = doc.data();
+        if (data.feedback) {
+          resultDiv.innerHTML = `<span class="text-blue-700 font-bold">선생님의 피드백:</span>\n${data.feedback}`;
+          resultDiv.classList.replace("bg-gray-50", "bg-green-50");
+        } else {
+          resultDiv.innerText = "제출은 확인되었습니다. 아직 선생님이 피드백을 작성하지 않으셨습니다.";
+        }
+      } else {
+        resultDiv.innerText = "해당 교번으로 제출된 내역이 없습니다.";
+      }
+    }
+
+    // 교사 모드 진입
+    function enterTeacherMode() {
+      const pwd = prompt("교사 비밀번호를 입력하세요:");
+      if (pwd === "1234") {
+        document.getElementById("student-view").classList.add("hidden");
+        document.getElementById("teacher-view").classList.remove("hidden");
+        loadTeacherData();
+      } else {
+        alert("비밀번호가 틀렸습니다.");
+      }
+    }
+
+    // 교사 모드 종료
+    function exitTeacherMode() {
+      document.getElementById("teacher-view").classList.add("hidden");
+      document.getElementById("student-view").classList.remove("hidden");
+    }
+
+    let allSubmissions = []; // CSV용 데이터 저장
+
+    // 교사 대시보드 실시간 데이터 로드
+    function loadTeacherData() {
+      db.collection("submissions").orderBy("studentId").onSnapshot((querySnapshot) => {
+        const tbody = document.getElementById("student-list-body");
+        tbody.innerHTML = "";
+        allSubmissions = [];
+
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          allSubmissions.push(data);
+          const dilemmaInfo = dilemmas.find(d => d.id == data.dilemmaId);
+          
+          const tr = document.createElement("tr");
+          tr.className = "border-b";
+          tr.innerHTML = `
+            <td class="p-3 border">${data.studentId}</td>
+            <td class="p-3 border">${data.studentName}</td>
+            <td class="p-3 border whitespace-nowrap text-xs">주제${data.dilemmaId}</td>
+            <td class="p-3 border font-bold ${data.choice === 'A' ? 'text-blue-600' : 'text-red-600'}">${data.choice}</td>
+            <td class="p-3 border text-xs truncate max-w-xs" title="${data.fact}">${data.fact}</td>
+            <td class="p-3 border">
+              <textarea id="feedback-${data.studentId}" class="w-full text-xs p-1 border rounded" placeholder="최종 피드백 입력">${data.feedback || ""}</textarea>
+              <button onclick="saveFeedback('${data.studentId}')" class="mt-1 text-xs bg-blue-500 text-white px-2 py-1 rounded">저장</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      });
+    }
+
+    // 교사 피드백 저장
+    async function saveFeedback(studentId) {
+      const feedback = document.getElementById(`feedback-${studentId}`).value;
+      try {
+        await db.collection("submissions").doc(studentId).update({ feedback: feedback });
+        alert(`${studentId} 학생 피드백 저장 완료!`);
+      } catch (error) {
+        console.error("Error updating document: ", error);
+        alert("저장 실패");
+      }
+    }
+
+    // CSV 다운로드 (교사용)
+    function downloadCSV() {
+      if(allSubmissions.length === 0) return alert("다운로드할 데이터가 없습니다.");
+      
+      const headers = ["교번", "이름", "주제번호", "선택", "사실적근거", "도덕적근거", "반박", "피드백"];
+      let csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers.join(",") + "\n"; // 한글 깨짐 방지 BOM 추가
+
+      allSubmissions.forEach(row => {
+        const rowData = [
+          row.studentId, row.studentName, row.dilemmaId, row.choice,
+          `"${row.fact.replace(/"/g, '""')}"`,
+          `"${row.moral.replace(/"/g, '""')}"`,
+          `"${row.rebuttal.replace(/"/g, '""')}"`,
+          `"${(row.feedback || "").replace(/"/g, '""')}"`
+        ];
+        csvContent += rowData.join(",") + "\n";
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "모의법정_제출데이터.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+</body>
+</html>
